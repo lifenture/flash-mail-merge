@@ -1,0 +1,212 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Flash Mail Merge
+  
+  Serverless application for processing DOCX mail merge operations
+
+# More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
+Globals:
+  Function:
+    Timeout: 30
+    MemorySize: 256
+    Runtime: go1.x
+    Architectures:
+      - x86_64
+    Environment:
+      Variables:
+        LOG_LEVEL: INFO
+  Api:
+    BinaryMediaTypes:
+      - "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+      - "application/octet-stream"
+
+Parameters:
+  Stage:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - staging
+      - prod
+    Description: Deployment stage
+
+Resources:
+  FlashMailMergeFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ../
+      Handler: bootstrap
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            Path: /detect
+            Method: post
+        S3Event:
+          Type: S3
+          Properties:
+            Bucket: !Ref DocumentBucket
+            Events: s3:ObjectCreated:*
+            Filter:
+              S3Key:
+                Rules:
+                  - Name: suffix
+                    Value: .docx
+      Environment:
+        Variables:
+          DOCUMENT_BUCKET: !Ref DocumentBucket
+          RESULT_BUCKET: !Ref ResultBucket
+          STAGE: !Ref Stage
+      Policies:
+        - S3ReadPolicy:
+            BucketName: !Ref DocumentBucket
+        - S3WritePolicy:
+            BucketName: !Ref ResultBucket
+
+  DocumentBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "flash-mail-merge-documents-${Stage}-${AWS::AccountId}"
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      VersioningConfiguration:
+        Status: Enabled
+
+  ResultBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "flash-mail-merge-results-${Stage}-${AWS::AccountId}"
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldResults
+            Status: Enabled
+            ExpirationInDays: 30
+
+  # API Gateway
+  ApiGatewayApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: !Ref Stage
+      Cors:
+        AllowMethods: "'GET,POST,OPTIONS'"
+        AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+        AllowOrigin: "'*'"
+      Auth:
+        ApiKeyRequired: true
+
+  # API Key
+  ApiKey:
+    Type: AWS::ApiGateway::ApiKey
+    Properties:
+      Name: !Sub "flash-mail-merge-api-key-${Stage}"
+      Description: "API Key for Flash Mail Merge service"
+      Enabled: true
+
+  # Usage Plan
+  UsagePlan:
+    Type: AWS::ApiGateway::UsagePlan
+    Properties:
+      UsagePlanName: !Sub "flash-mail-merge-usage-plan-${Stage}"
+      Description: "Usage plan for Flash Mail Merge service"
+      ApiStages:
+        - ApiId: !Ref ApiGatewayApi
+          Stage: !Ref Stage
+      Throttle:
+        RateLimit: 100
+        BurstLimit: 200
+      Quota:
+        Limit: 10000
+        Period: DAY
+
+  # Link API Key to Usage Plan
+  UsagePlanKey:
+    Type: AWS::ApiGateway::UsagePlanKey
+    Properties:
+      KeyId: !Ref ApiKey
+      KeyType: API_KEY
+      UsagePlanId: !Ref UsagePlan
+
+  # IAM Role for Lambda
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: S3Access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:DeleteObject
+                Resource:
+                  - !Sub "${DocumentBucket}/*"
+                  - !Sub "${ResultBucket}/*"
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket
+                Resource:
+                  - !Ref DocumentBucket
+                  - !Ref ResultBucket
+
+Outputs:
+  FlashMailMergeApi:
+    Description: "API Gateway endpoint URL for Flash Mail Merge function"
+    Value: !Sub "https://${ApiGatewayApi}.execute-api.${AWS::Region}.amazonaws.com/${Stage}/detect"
+    Export:
+      Name: !Sub "${AWS::StackName}-ApiEndpoint"
+  
+  FlashMailMergeFunction:
+    Description: "Flash Mail Merge Lambda Function ARN"
+    Value: !GetAtt FlashMailMergeFunction.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-FunctionArn"
+  
+  DocumentBucket:
+    Description: "S3 bucket for storing input documents"
+    Value: !Ref DocumentBucket
+    Export:
+      Name: !Sub "${AWS::StackName}-DocumentBucket"
+  
+  ResultBucket:
+    Description: "S3 bucket for storing processed results"
+    Value: !Ref ResultBucket
+    Export:
+      Name: !Sub "${AWS::StackName}-ResultBucket"
+  
+  ApiKey:
+    Description: "API Key for accessing the service"
+    Value: !Ref ApiKey
+    Export:
+      Name: !Sub "${AWS::StackName}-ApiKey"
