@@ -6,6 +6,11 @@ import (
 	"time"
 )
 
+// normalize standardizes field names for consistent comparison
+func normalize(s string) string {
+	return strings.ToLower(s)
+}
+
 // MergeField represents a merge field found in a document
 type MergeField struct {
 	// Name is the field name/identifier
@@ -89,6 +94,10 @@ type MergeFieldSet struct {
 	
 	// TotalFields is the count of fields found
 	TotalFields int `json:"total_fields"`
+	
+	// normalizedFieldMap is a cached map for fast case-insensitive field lookups
+	// Maps normalized field names to MergeField pointers
+	normalizedFieldMap map[string]*MergeField `json:"-"`
 }
 
 // MergeData represents the data to be merged into fields
@@ -134,23 +143,31 @@ func (mfs MergeFieldSet) GetRequiredFields() []MergeField {
 	return required
 }
 
-// GetFieldByName returns a field by its name, or nil if not found
-func (mfs MergeFieldSet) GetFieldByName(name string) *MergeField {
-	for _, field := range mfs.Fields {
-		if field.Name == name {
-			return &field
+// buildNormalizedFieldMap builds the normalized field map if it doesn't exist
+func (mfs *MergeFieldSet) buildNormalizedFieldMap() {
+	if mfs.normalizedFieldMap == nil {
+		mfs.normalizedFieldMap = make(map[string]*MergeField)
+		for i := range mfs.Fields {
+			normalizedName := normalize(mfs.Fields[i].Name)
+			mfs.normalizedFieldMap[normalizedName] = &mfs.Fields[i]
 		}
 	}
-	return nil
+}
+
+// GetFieldByName returns a field by its name, or nil if not found
+func (mfs *MergeFieldSet) GetFieldByName(name string) *MergeField {
+	mfs.buildNormalizedFieldMap()
+	normalizedName := normalize(name)
+	return mfs.normalizedFieldMap[normalizedName]
 }
 
 // HasField checks if a field with the given name exists
-func (mfs MergeFieldSet) HasField(name string) bool {
+func (mfs *MergeFieldSet) HasField(name string) bool {
 	return mfs.GetFieldByName(name) != nil
 }
 
 // Validate checks if the provided merge data is valid for this field set
-func (mfs MergeFieldSet) Validate(data MergeData) ValidationResult {
+func (mfs *MergeFieldSet) Validate(data MergeData) ValidationResult {
 	result := ValidationResult{
 		Valid:         true,
 		Errors:        []string{},
@@ -160,7 +177,16 @@ func (mfs MergeFieldSet) Validate(data MergeData) ValidationResult {
 
 	// Check required fields
 	for _, field := range mfs.GetRequiredFields() {
-		if _, exists := data[field.Name]; !exists {
+		// Check if field exists using normalized name matching
+		found := false
+		normalizedFieldName := normalize(field.Name)
+		for dataKey := range data {
+			if normalize(dataKey) == normalizedFieldName {
+				found = true
+				break
+			}
+		}
+		if !found {
 			result.Valid = false
 			result.MissingFields = append(result.MissingFields, field.Name)
 			result.Errors = append(result.Errors, fmt.Sprintf("Required field '%s' is missing", field.Name))
@@ -232,9 +258,20 @@ func (md MergeData) IsEmpty() bool {
 
 // GetString safely gets a string value from merge data
 func (md MergeData) GetString(key string) (string, bool) {
+	// First try exact match
 	if value, exists := md[key]; exists {
 		if str, ok := value.(string); ok {
 			return str, true
+		}
+	}
+	
+	// If not found, try normalized key matching
+	normalizedKey := normalize(key)
+	for k, value := range md {
+		if normalize(k) == normalizedKey {
+			if str, ok := value.(string); ok {
+				return str, true
+			}
 		}
 	}
 	return "", false
@@ -242,6 +279,7 @@ func (md MergeData) GetString(key string) (string, bool) {
 
 // GetInt safely gets an integer value from merge data
 func (md MergeData) GetInt(key string) (int, bool) {
+	// First try exact match
 	if value, exists := md[key]; exists {
 		switch v := value.(type) {
 		case int:
@@ -252,14 +290,40 @@ func (md MergeData) GetInt(key string) (int, bool) {
 			return int(v), true
 		}
 	}
+	
+	// If not found, try normalized key matching
+	normalizedKey := normalize(key)
+	for k, value := range md {
+		if normalize(k) == normalizedKey {
+			switch v := value.(type) {
+			case int:
+				return v, true
+			case int64:
+				return int(v), true
+			case float64:
+				return int(v), true
+			}
+		}
+	}
 	return 0, false
 }
 
 // GetBool safely gets a boolean value from merge data
 func (md MergeData) GetBool(key string) (bool, bool) {
+	// First try exact match
 	if value, exists := md[key]; exists {
 		if b, ok := value.(bool); ok {
 			return b, true
+		}
+	}
+	
+	// If not found, try normalized key matching
+	normalizedKey := normalize(key)
+	for k, value := range md {
+		if normalize(k) == normalizedKey {
+			if b, ok := value.(bool); ok {
+				return b, true
+			}
 		}
 	}
 	return false, false

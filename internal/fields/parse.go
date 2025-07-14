@@ -43,13 +43,14 @@ func DetectDuplicates(raw json.RawMessage) []string {
 			return duplicates
 		}
 		
-		// Check if key already exists
-		if seen[key] {
+	// Check if key already exists (using normalized comparison)
+		normalizedKey := normalize(key)
+		if seen[normalizedKey] {
 			// This is a duplicate occurrence
 			duplicates = append(duplicates, key)
 		} else {
 			// First occurrence
-			seen[key] = true
+			seen[normalizedKey] = true
 		}
 		
 		// Skip the value for this key
@@ -93,8 +94,16 @@ func parseMergeData(raw json.RawMessage) (MergeData, error) {
 			return nil, fmt.Errorf("expected string key, got %T: %v", token, token)
 		}
 		
-		// Check if key already exists (first-win logic)
-		if _, exists := result[key]; exists {
+	// Check if key already exists (first-win logic, using normalized comparison)
+		normalizedKey := normalize(key)
+		existingKey := ""
+		for k := range result {
+			if normalize(k) == normalizedKey {
+				existingKey = k
+				break
+			}
+		}
+		if existingKey != "" {
 			// Skip the value for this duplicate key
 			var dummy interface{}
 			if err := decoder.Decode(&dummy); err != nil {
