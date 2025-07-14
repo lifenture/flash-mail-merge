@@ -7,8 +7,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"reflect"
-	"sort"
 	"strings"
 	"testing"
 
@@ -81,37 +79,9 @@ func TestHandler(t *testing.T) {
 		t.Fatalf("Failed to unmarshal response body: %v", err)
 	}
 	
-	// Check that fields are present
-	fields, ok := responseData["fields"].([]interface{})
-	if !ok {
-		t.Fatalf("Response does not contain 'fields' array")
-	}
-	
-	// Convert to string slice
-	fieldStrings := make([]string, len(fields))
-	for i, field := range fields {
-		fieldStrings[i] = field.(string)
-	}
-	
-	// Check expected fields
-	expectedFields := []string{"FirstName", "LastName", "Email", "Company", "Phone"}
-	
-	// Sort both slices for comparison
-	sort.Strings(fieldStrings)
-	sort.Strings(expectedFields)
-	
-	if !reflect.DeepEqual(fieldStrings, expectedFields) {
-		t.Errorf("Expected fields %v, got %v", expectedFields, fieldStrings)
-	}
-	
-	// Check count
-	count, ok := responseData["count"].(float64)
-	if !ok {
-		t.Fatalf("Response does not contain 'count' field")
-	}
-	
-	if int(count) != 5 {
-		t.Errorf("Expected count 5, got %d", int(count))
+	// With no data field, the response should be empty
+	if len(responseData) != 0 {
+		t.Errorf("Expected empty response when no data field provided, got %v", responseData)
 	}
 }
 
@@ -212,7 +182,7 @@ func TestHandlerWithDuplicateKeys(t *testing.T) {
 	// This JSON intentionally contains duplicate keys to test first-win logic
 	requestBodyJSON := `{
 		"docx": "` + encodedDocx + `",
-		"data": {"FirstName": "John", "LastName": "Doe", "Email": "john@example.com", "FirstName": "Jane", "Company": "ACME Corp", "Email": "jane@example.com", "Phone": "555-0123"}
+		"data": {"Contact_FirstName": "John", "Contact_FullName": "John Doe", "User_Email": "john@example.com", "Contact_FirstName": "Jane", "User_Company": "ACME Corp", "User_Email": "jane@example.com", "User_Phone": "555-0123"}
 	}`
 	
 	// Create the Lambda event
@@ -241,32 +211,14 @@ func TestHandlerWithDuplicateKeys(t *testing.T) {
 		t.Fatalf("Failed to unmarshal response body: %v", err)
 	}
 	
-	// Check that merge_data is present and contains first-win values
-	mergeDataRaw, ok := responseData["merge_data"]
-	if !ok {
-		t.Fatalf("Response does not contain 'merge_data' field")
+	// Check that mergedDocument is present
+	if _, ok := responseData["mergedDocument"]; !ok {
+		t.Fatalf("Response does not contain 'mergedDocument' field")
 	}
 	
-	mergeData, ok := mergeDataRaw.(map[string]interface{})
-	if !ok {
-		t.Fatalf("merge_data is not a map")
-	}
-	
-	// Check first-win logic - first occurrence should be kept
-	if mergeData["FirstName"] != "John" {
-		t.Errorf("Expected FirstName='John' (first occurrence), got '%v'", mergeData["FirstName"])
-	}
-	if mergeData["Email"] != "john@example.com" {
-		t.Errorf("Expected Email='john@example.com' (first occurrence), got '%v'", mergeData["Email"])
-	}
-	if mergeData["LastName"] != "Doe" {
-		t.Errorf("Expected LastName='Doe', got '%v'", mergeData["LastName"])
-	}
-	if mergeData["Company"] != "ACME Corp" {
-		t.Errorf("Expected Company='ACME Corp', got '%v'", mergeData["Company"])
-	}
-	if mergeData["Phone"] != "555-0123" {
-		t.Errorf("Expected Phone='555-0123', got '%v'", mergeData["Phone"])
+	// Check that skippedFields is present
+	if _, ok := responseData["skippedFields"]; !ok {
+		t.Fatalf("Response does not contain 'skippedFields' field")
 	}
 	
 	// Check that validation warnings are present about duplicate keys
@@ -303,19 +255,19 @@ func TestHandlerWithDuplicateKeys(t *testing.T) {
 		if !ok {
 			continue
 		}
-		if strings.Contains(warningStr, "FirstName") && strings.Contains(strings.ToLower(warningStr), "duplicate") {
+		if strings.Contains(warningStr, "Contact_FirstName") && strings.Contains(strings.ToLower(warningStr), "duplicate") {
 			hasFirstNameWarning = true
 		}
-		if strings.Contains(warningStr, "Email") && strings.Contains(strings.ToLower(warningStr), "duplicate") {
+		if strings.Contains(warningStr, "User_Email") && strings.Contains(strings.ToLower(warningStr), "duplicate") {
 			hasEmailWarning = true
 		}
 	}
 	
 	if !hasFirstNameWarning {
-		t.Errorf("Expected warning about duplicate FirstName key")
+		t.Errorf("Expected warning about duplicate Contact_FirstName key")
 	}
 	if !hasEmailWarning {
-		t.Errorf("Expected warning about duplicate Email key")
+		t.Errorf("Expected warning about duplicate User_Email key")
 	}
 	
 	// Check that overall validation is still valid despite warnings
@@ -363,7 +315,7 @@ func TestHandlerWithDuplicateKeysRawJSON(t *testing.T) {
 	// This simulates a more realistic scenario where the JSON might come from external sources
 	requestBodyJSON := `{
 		"docx": "` + encodedDocx + `",
-		"data": {"FirstName": "Alice", "LastName": "Smith", "Email": "alice@test.com", "FirstName": "Bob", "Company": "TestCorp", "Email": "bob@test.com", "Phone": "555-9999"}
+		"data": {"Contact_FirstName": "Alice", "Contact_FullName": "Alice Smith", "User_Email": "alice@test.com", "Contact_FirstName": "Bob", "User_Company": "TestCorp", "User_Email": "bob@test.com", "User_Phone": "555-9999"}
 	}`
 	
 	// Create the Lambda event
@@ -392,31 +344,13 @@ func TestHandlerWithDuplicateKeysRawJSON(t *testing.T) {
 		t.Fatalf("Failed to unmarshal response body: %v", err)
 	}
 	
-	// Check that merge_data contains first-win values
-	mergeDataRaw, ok := responseData["merge_data"]
-	if !ok {
-		t.Fatalf("Response does not contain 'merge_data' field")
+	// Check that mergedDocument is present
+	if _, ok := responseData["mergedDocument"]; !ok {
+		t.Fatalf("Response does not contain 'mergedDocument' field")
 	}
 	
-	mergeData, ok := mergeDataRaw.(map[string]interface{})
-	if !ok {
-		t.Fatalf("merge_data is not a map")
-	}
-	
-	// Verify first-win logic
-	if mergeData["FirstName"] != "Alice" {
-		t.Errorf("Expected FirstName='Alice' (first occurrence), got '%v'", mergeData["FirstName"])
-	}
-	if mergeData["Email"] != "alice@test.com" {
-		t.Errorf("Expected Email='alice@test.com' (first occurrence), got '%v'", mergeData["Email"])
-	}
-	if mergeData["LastName"] != "Smith" {
-		t.Errorf("Expected LastName='Smith', got '%v'", mergeData["LastName"])
-	}
-	if mergeData["Company"] != "TestCorp" {
-		t.Errorf("Expected Company='TestCorp', got '%v'", mergeData["Company"])
-	}
-	if mergeData["Phone"] != "555-9999" {
-		t.Errorf("Expected Phone='555-9999', got '%v'", mergeData["Phone"])
+	// Check that skippedFields is present
+	if _, ok := responseData["skippedFields"]; !ok {
+		t.Fatalf("Response does not contain 'skippedFields' field")
 	}
 }

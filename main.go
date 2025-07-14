@@ -14,7 +14,36 @@ import (
 
 	"com/lifenture/flash-mail-merge/internal/docx"
 	"com/lifenture/flash-mail-merge/internal/fields"
+	"com/lifenture/flash-mail-merge/internal/merge"
 )
+
+// Common headers for all responses
+func getCommonHeaders() map[string]string {
+	return map[string]string{"Content-Type": "application/json"}
+}
+
+// Helper function to create error responses
+func createErrorResponse(statusCode int, errorMessage string) events.APIGatewayProxyResponse {
+	return events.APIGatewayProxyResponse{
+		StatusCode: statusCode,
+		Headers:    getCommonHeaders(),
+		Body:       fmt.Sprintf(`{"error": "%s"}`, errorMessage),
+	}
+}
+
+// Helper function to create successful response
+func createSuccessResponse(data interface{}) (events.APIGatewayProxyResponse, error) {
+	responseBody, err := json.Marshal(data)
+	if err != nil {
+		return events.APIGatewayProxyResponse{}, fmt.Errorf("failed to marshal response: %w", err)
+	}
+
+	return events.APIGatewayProxyResponse{
+		StatusCode: http.StatusOK,
+		Headers:    getCommonHeaders(),
+		Body:       string(responseBody),
+	}, nil
+}
 
 // MergeRequest represents the request payload for merge operations
 type MergeRequest struct {
@@ -85,68 +114,42 @@ func parseMergeData(raw json.RawMessage) (fields.MergeData, error) {
 }
 
 func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
-	headers := map[string]string{"Content-Type": "application/json"}
-
 	// Unmarshal the body into MergeRequest
 	var req MergeRequest
 	if err := json.Unmarshal([]byte(request.Body), &req); err != nil {
 		log.Printf("failed to unmarshal request body: %v", err)
-		return events.APIGatewayProxyResponse{
-			StatusCode: http.StatusBadRequest,
-			Headers:    headers,
-			Body:       `{"error": "Invalid input"}`,
-		}, nil
+		return createErrorResponse(http.StatusBadRequest, "Invalid input"), nil
 	}
 
 	// Check if docx field is present
 	if req.Docx == "" {
 		log.Println("'docx' field is empty")
-		return events.APIGatewayProxyResponse{
-			StatusCode: http.StatusBadRequest,
-			Headers:    headers,
-			Body:       `{"error": "'docx' key missing"}`,
-		}, nil
+		return createErrorResponse(http.StatusBadRequest, "'docx' key missing"), nil
 	}
 
 	// Decode the DOCX exactly as today
 	docxBytes, err := base64.StdEncoding.DecodeString(req.Docx)
 	if err != nil {
 		log.Printf("failed to decode base64 string: %v", err)
-		return events.APIGatewayProxyResponse{
-			StatusCode: http.StatusBadRequest,
-			Headers:    headers,
-			Body:       `{"error": "Failed to decode base64 input"}`,
-		}, nil
+		return createErrorResponse(http.StatusBadRequest, "Failed to decode base64 input"), nil
 	}
-
 
 	// Create a DocxFile from the bytes to use ExtractFields
 	docxFile, err := docx.UnzipDocx(docxBytes)
 	if err != nil {
 		log.Printf("failed to create DOCX file: %v", err)
-		return events.APIGatewayProxyResponse{
-			StatusCode: http.StatusInternalServerError,
-			Headers:    headers,
-			Body:       `{"error": "Failed to process document"}`,
-		}, nil
+		return createErrorResponse(http.StatusInternalServerError, "Failed to process document"), nil
 	}
 
 	// Extract fields to get MergeFieldSet
 	fieldSet, err := fields.ExtractFields(docxFile)
 	if err != nil {
 		log.Printf("failed to extract fields: %v", err)
-		return events.APIGatewayProxyResponse{
-			StatusCode: http.StatusInternalServerError,
-			Headers:    headers,
-			Body:       `{"error": "Failed to extract fields"}`,
-		}, nil
+		return createErrorResponse(http.StatusInternalServerError, "Failed to extract fields"), nil
 	}
 
 	// Prepare response structure
-	response := map[string]interface{}{
-		"fields": fieldSet.GetFieldNames(),
-		"count":  len(fieldSet.Fields),
-	}
+	response := map[string]interface{}{}
 
 	// If req.Data is present, parse merge data and validate
 	if req.Data != nil {
@@ -158,11 +161,7 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 		mergeData, err := parseMergeData(req.Data)
 		if err != nil {
 			log.Printf("failed to parse merge data: %v", err)
-			return events.APIGatewayProxyResponse{
-				StatusCode: http.StatusBadRequest,
-				Headers:    headers,
-				Body:       `{"error": "Failed to parse merge data"}`,
-			}, nil
+			return createErrorResponse(http.StatusBadRequest, "Failed to parse merge data"), nil
 		}
 
 		// Run validation
@@ -176,43 +175,48 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 			}
 		}
 
-		// Include validation output and cleaned-up merge data in response
+		// Include validation output in response
 		response["validation"] = validationResult
-		response["merge_data"] = mergeData
 
-		// Return 400 if validation failed
+		// Only execute merge if validation passed
 		if !validationResult.Valid {
+			// Return validation error with response including validation details
 			responseBody, err := json.Marshal(response)
 			if err != nil {
 				log.Printf("failed to marshal response: %v", err)
-				return events.APIGatewayProxyResponse{
-					StatusCode: http.StatusInternalServerError,
-					Body:       `{"error": "Failed to create response"}`,
-				}, nil
+				return createErrorResponse(http.StatusInternalServerError, "Failed to create response"), nil
 			}
 
 			return events.APIGatewayProxyResponse{
 				StatusCode: http.StatusBadRequest,
-				Headers:    headers,
+				Headers:    getCommonHeaders(),
 				Body:       string(responseBody),
 			}, nil
 		}
+
+		// After successful validation, perform merge
+		mergedBytes, skipped, err := merge.PerformMerge(docxFile, mergeData)
+		if err != nil {
+			log.Printf("failed to perform merge: %v", err)
+			return createErrorResponse(http.StatusInternalServerError, "Failed to perform merge"), nil
+		}
+
+		// Base64-encode the merged document
+		mergedDocumentB64 := base64.StdEncoding.EncodeToString(mergedBytes)
+
+		// Add merged document and skipped fields to response
+		response["mergedDocument"] = mergedDocumentB64
+		response["skippedFields"] = skipped
 	}
 
-	responseBody, err := json.Marshal(response)
+	// Use helper function to create successful response
+	successResponse, err := createSuccessResponse(response)
 	if err != nil {
-		log.Printf("failed to marshal response: %v", err)
-		return events.APIGatewayProxyResponse{
-			StatusCode: http.StatusInternalServerError,
-			Body:       `{"error": "Failed to create response"}`,
-		}, nil
+		log.Printf("failed to create success response: %v", err)
+		return createErrorResponse(http.StatusInternalServerError, "Failed to create response"), nil
 	}
 
-	return events.APIGatewayProxyResponse{
-		StatusCode: http.StatusOK,
-		Headers:    headers,
-		Body:       string(responseBody),
-	}, nil
+	return successResponse, nil
 }
 
 func main() {

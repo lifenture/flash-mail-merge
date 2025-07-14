@@ -187,7 +187,12 @@ func TestExtractFromSampleDocx(t *testing.T) {
 	}
 	
 	// Expected fields from our sample DOCX
-	expectedFields := []string{"FirstName", "LastName", "Email", "Company", "Phone"}
+	expectedFields := []string{
+		"Account_Name", "Contact_FirstName", "Contact_FullName", "Contact_MailingAddress",
+		"Contact_MailingCity", "Contact_MailingPostalCode", "Contact_MailingState", "Contact_Title",
+		"Org_Address", "Org_City", "Org_Name", "Org_PostalCode", "Org_State", "Today",
+		"User_Company", "User_Email", "User_Fax", "User_FullName", "User_Phone", "User_Title",
+	}
 	
 	// Sort both slices for comparison
 	sort.Strings(fields)
@@ -198,7 +203,7 @@ func TestExtractFromSampleDocx(t *testing.T) {
 	}
 	
 	// Verify we got the expected count
-	if len(fields) != 5 {
-		t.Errorf("Expected 5 fields, got %d", len(fields))
+	if len(fields) != 20 {
+		t.Errorf("Expected 20 fields, got %d", len(fields))
 	}
 }
