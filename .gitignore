@@ -53,6 +53,7 @@ main
 bootstrap
 packaged.yaml
 flash-mail-merge-lambda.zip
+flash-mail-merge
 
 # Logs
 *.log
