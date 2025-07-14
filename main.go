@@ -67,9 +67,6 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 		}, nil
 	}
 
-	for _, name := range extractedFields {
-		log.Printf("mergeField=%s", name)
-	}
 
 	response := map[string]interface{}{
 		"fields": extractedFields,
