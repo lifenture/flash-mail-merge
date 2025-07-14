@@ -6,6 +6,26 @@ import (
 	"testing"
 )
 
+// compareMergeData compares two MergeData maps for equality
+func compareMergeData(a, b map[string]interface{}) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	
+	for key, valueA := range a {
+		valueB, exists := b[key]
+		if !exists {
+			return false
+		}
+		
+		if !reflect.DeepEqual(valueA, valueB) {
+			return false
+		}
+	}
+	
+	return true
+}
+
 func TestDetectDuplicates(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -105,5 +125,105 @@ func TestDetectDuplicatesIntegration(t *testing.T) {
 	}
 	if mergeData["company"] != "ACME Corp" {
 		t.Errorf("Expected company='ACME Corp', got '%v'", mergeData["company"])
+	}
+}
+
+// TestParseMergeDataFirstWin tests the first-win duplicate key logic specifically
+func TestParseMergeDataFirstWin(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    json.RawMessage
+		expected map[string]interface{}
+		expectError bool
+	}{
+		{
+			name:  "single duplicate key",
+			input: json.RawMessage(`{"name": "first", "age": 25, "name": "second"}`),
+			expected: map[string]interface{}{
+				"name": "first",
+				"age":  float64(25),
+			},
+			expectError: false,
+		},
+		{
+			name:  "multiple duplicate keys",
+			input: json.RawMessage(`{"name": "first", "age": 25, "name": "second", "age": 30, "city": "NYC"}`),
+			expected: map[string]interface{}{
+				"name": "first",
+				"age":  float64(25),
+				"city": "NYC",
+			},
+			expectError: false,
+		},
+		{
+			name:  "triple duplicate key",
+			input: json.RawMessage(`{"name": "first", "name": "second", "name": "third"}`),
+			expected: map[string]interface{}{
+				"name": "first",
+			},
+			expectError: false,
+		},
+		{
+			name:  "no duplicates",
+			input: json.RawMessage(`{"name": "John", "age": 30, "city": "NYC"}`),
+			expected: map[string]interface{}{
+				"name": "John",
+				"age":  float64(30),
+				"city": "NYC",
+			},
+			expectError: false,
+		},
+		{
+			name:  "complex values with duplicates",
+			input: json.RawMessage(`{"user": {"name": "John"}, "settings": ["dark"], "user": {"name": "Jane"}, "settings": ["light"]}`),
+			expected: map[string]interface{}{
+				"user":     map[string]interface{}{"name": "John"},
+				"settings": []interface{}{"dark"},
+			},
+			expectError: false,
+		},
+		{
+			name:  "different data types for same key",
+			input: json.RawMessage(`{"value": "string", "count": 42, "value": 123, "value": true}`),
+			expected: map[string]interface{}{
+				"value": "string",
+				"count": float64(42),
+			},
+			expectError: false,
+		},
+		{
+			name:        "invalid JSON",
+			input:       json.RawMessage(`{"name": "John", "age": 30`),
+			expected:    nil,
+			expectError: true,
+		},
+		{
+			name:        "empty JSON",
+			input:       json.RawMessage(`{}`),
+			expected:    map[string]interface{}{},
+			expectError: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := parseMergeData(tt.input)
+			
+			if tt.expectError {
+				if err == nil {
+					t.Errorf("Expected error but got none")
+				}
+				return
+			}
+			
+			if err != nil {
+				t.Errorf("Unexpected error: %v", err)
+				return
+			}
+			
+			if !compareMergeData(result, tt.expected) {
+				t.Errorf("parseMergeData() = %v, want %v", result, tt.expected)
+			}
+		})
 	}
 }
