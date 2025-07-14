@@ -3,5 +3,10 @@
   "httpMethod": "POST",
   "headers": {
     "Content-Type": "application/json"
+  },
+  "jsonPayload": {
+    "item": "Book",
+    "quantity": 1,
+    "item": "Pen"
   }
 }
