@@ -197,8 +197,7 @@ func (mfs *MergeFieldSet) Validate(data MergeData) ValidationResult {
 	for fieldName, value := range data {
 		field := mfs.GetFieldByName(fieldName)
 		if field == nil {
-			result.Warnings = append(result.Warnings, fmt.Sprintf("Field '%s' not found in document", fieldName))
-			continue
+			continue   // silently ignore data keys not present in template
 		}
 
 		if err := validateFieldValue(field, value); err != nil {
