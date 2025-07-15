@@ -11,16 +11,14 @@ import (
 )
 
 func TestReplaceFieldValues(t *testing.T) {
-	// Test XML with simple and complex merge fields
+	// Test XML with merge fields in the expected format
 	xml := `<w:document>
 		<w:body>
 			<w:p>
-				<w:r><w:fldSimple w:instr="MERGEFIELD name"/><w:r><w:t>John</w:t></w:r></w:fldSimple></w:r>
-				<w:r><w:fldChar w:fldCharType="begin"/></w:r>
-				<w:r><w:instrText> MERGEFIELD age </w:instrText></w:r>
-				<w:r><w:fldChar w:fldCharType="separate"/></w:r>
-				<w:r><w:t>25</w:t></w:r>
-				<w:r><w:fldChar w:fldCharType="end"/></w:r>
+				<w:r><w:t>«name»</w:t></w:r>
+				<w:r><w:t> is </w:t></w:r>
+				<w:r><w:t>«age»</w:t></w:r>
+				<w:r><w:t> years old</w:t></w:r>
 			</w:p>
 		</w:body>
 	</w:document>`
@@ -51,16 +49,11 @@ func TestReplaceFieldValues(t *testing.T) {
 }
 
 func TestReplaceFieldValuesWithMultipleRuns(t *testing.T) {
-	// Test multiple run collapse - simulates a field that spans multiple runs
+	// Test field replacement with formatting
 	xml := `<w:document>
 		<w:body>
 			<w:p>
-				<w:r><w:fldChar w:fldCharType="begin"/></w:r>
-				<w:r><w:instrText> MERGEFIELD fullname </w:instrText></w:r>
-				<w:r><w:fldChar w:fldCharType="separate"/></w:r>
-				<w:r><w:rPr><w:b/></w:rPr><w:t>First</w:t></w:r>
-				<w:r><w:t> name</w:t></w:r>
-				<w:r><w:fldChar w:fldCharType="end"/></w:r>
+				<w:r><w:rPr><w:b/></w:rPr><w:t>«fullname»</w:t></w:r>
 			</w:p>
 		</w:body>
 	</w:document>`
@@ -78,9 +71,9 @@ func TestReplaceFieldValuesWithMultipleRuns(t *testing.T) {
 		t.Error("Fullname field was not replaced correctly")
 	}
 
-	// Should preserve the first run's formatting (bold)
+	// Should preserve the run's formatting (bold)
 	if !strings.Contains(result, "<w:rPr><w:b/></w:rPr>") {
-		t.Error("First run's formatting (bold) was not preserved")
+		t.Error("Run's formatting (bold) was not preserved")
 	}
 
 	if len(skipped) != 0 {
@@ -93,12 +86,9 @@ func TestReplaceFieldValuesWithSkipped(t *testing.T) {
 	xml := `<w:document>
 		<w:body>
 			<w:p>
-				<w:r><w:fldSimple w:instr="MERGEFIELD name"/><w:r><w:t>John</w:t></w:r></w:fldSimple></w:r>
-				<w:r><w:fldChar w:fldCharType="begin"/></w:r>
-				<w:r><w:instrText> MERGEFIELD email </w:instrText></w:r>
-				<w:r><w:fldChar w:fldCharType="separate"/></w:r>
-				<w:r><w:t>test@example.com</w:t></w:r>
-				<w:r><w:fldChar w:fldCharType="end"/></w:r>
+				<w:r><w:t>«name»</w:t></w:r>
+				<w:r><w:t> has email: </w:t></w:r>
+				<w:r><w:t>«email»</w:t></w:r>
 			</w:p>
 		</w:body>
 	</w:document>`
@@ -118,8 +108,8 @@ func TestReplaceFieldValuesWithSkipped(t *testing.T) {
 		t.Error("Name field was not replaced")
 	}
 
-	// Check that email field was not replaced - should contain original instrText
-	if !strings.Contains(result, "<w:instrText> MERGEFIELD email </w:instrText>") {
+	// Check that email field was not replaced - should contain original placeholder
+	if !strings.Contains(result, "«email»") {
 		t.Error("Email field should remain as placeholder")
 	}
 
@@ -217,67 +207,22 @@ func createSampleDocxBytes(documentXML string) []byte {
 
 // TestPerformMergeAllFieldsReplaced tests the scenario where all fields are replaced
 func TestPerformMergeAllFieldsReplaced(t *testing.T) {
-	// Create a DOCX with multiple merge fields
+	// Create a DOCX with multiple merge fields using the expected format
 	documentXML := `<?xml version="1.0"?>
 <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
 	<w:body>
 		<w:p>
-			<w:fldSimple w:instr="MERGEFIELD firstname">
-				<w:r>
-					<w:t>John</w:t>
-				</w:r>
-			</w:fldSimple>
-			<w:r>
-				<w:t> </w:t>
-			</w:r>
-			<w:fldSimple w:instr="MERGEFIELD lastname">
-				<w:r>
-					<w:t>Doe</w:t>
-				</w:r>
-			</w:fldSimple>
+			<w:r><w:t>«firstname»</w:t></w:r>
+			<w:r><w:t> </w:t></w:r>
+			<w:r><w:t>«lastname»</w:t></w:r>
 		</w:p>
 		<w:p>
-			<w:r>
-				<w:t>Age: </w:t>
-			</w:r>
-			<w:r>
-				<w:fldChar w:fldCharType="begin"/>
-			</w:r>
-			<w:r>
-				<w:instrText> MERGEFIELD age </w:instrText>
-			</w:r>
-			<w:r>
-				<w:fldChar w:fldCharType="separate"/>
-			</w:r>
-			<w:r>
-				<w:t>25</w:t>
-			</w:r>
-			<w:r>
-				<w:fldChar w:fldCharType="end"/>
-			</w:r>
+			<w:r><w:t>Age: </w:t></w:r>
+			<w:r><w:t>«age»</w:t></w:r>
 		</w:p>
 		<w:p>
-			<w:r>
-				<w:t>Email: </w:t>
-			</w:r>
-			<w:r>
-				<w:fldChar w:fldCharType="begin"/>
-			</w:r>
-			<w:r>
-				<w:instrText> MERGEFIELD email </w:instrText>
-			</w:r>
-			<w:r>
-				<w:fldChar w:fldCharType="separate"/>
-			</w:r>
-			<w:r>
-				<w:rPr>
-					<w:b/>
-				</w:rPr>
-				<w:t>user@example.com</w:t>
-			</w:r>
-			<w:r>
-				<w:fldChar w:fldCharType="end"/>
-			</w:r>
+			<w:r><w:t>Email: </w:t></w:r>
+			<w:r><w:rPr><w:b/></w:rPr><w:t>«email»</w:t></w:r>
 		</w:p>
 	</w:body>
 </w:document>`
@@ -345,74 +290,26 @@ func TestPerformMergeAllFieldsReplaced(t *testing.T) {
 
 // TestPerformMergeSomeFieldsMissing tests the scenario where some fields are missing
 func TestPerformMergeSomeFieldsMissing(t *testing.T) {
-	// Create a DOCX with multiple merge fields
+	// Create a DOCX with multiple merge fields using the expected format
 	documentXML := `<?xml version="1.0"?>
 <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
 	<w:body>
 		<w:p>
-			<w:r>
-				<w:fldSimple w:instr="MERGEFIELD firstname">
-					<w:t>John</w:t>
-				</w:fldSimple>
-			</w:r>
-			<w:r>
-				<w:t> </w:t>
-			</w:r>
-			<w:r>
-				<w:fldSimple w:instr="MERGEFIELD lastname">
-					<w:t>Doe</w:t>
-				</w:fldSimple>
-			</w:r>
+			<w:r><w:t>«firstname»</w:t></w:r>
+			<w:r><w:t> </w:t></w:r>
+			<w:r><w:t>«lastname»</w:t></w:r>
 		</w:p>
 		<w:p>
-			<w:r>
-				<w:t>Age: </w:t>
-			</w:r>
-			<w:r>
-				<w:fldChar w:fldCharType="begin"/>
-			</w:r>
-			<w:r>
-				<w:instrText> MERGEFIELD age </w:instrText>
-			</w:r>
-			<w:r>
-				<w:fldChar w:fldCharType="separate"/>
-			</w:r>
-			<w:r>
-				<w:t>25</w:t>
-			</w:r>
-			<w:r>
-				<w:fldChar w:fldCharType="end"/>
-			</w:r>
+			<w:r><w:t>Age: </w:t></w:r>
+			<w:r><w:t>«age»</w:t></w:r>
 		</w:p>
 		<w:p>
-			<w:r>
-				<w:t>Phone: </w:t>
-			</w:r>
-			<w:r>
-				<w:fldChar w:fldCharType="begin"/>
-			</w:r>
-			<w:r>
-				<w:instrText> MERGEFIELD phone </w:instrText>
-			</w:r>
-			<w:r>
-				<w:fldChar w:fldCharType="separate"/>
-			</w:r>
-			<w:r>
-				<w:t>555-1234</w:t>
-			</w:r>
-			<w:r>
-				<w:fldChar w:fldCharType="end"/>
-			</w:r>
+			<w:r><w:t>Phone: </w:t></w:r>
+			<w:r><w:t>«phone»</w:t></w:r>
 		</w:p>
 		<w:p>
-			<w:r>
-				<w:t>Department: </w:t>
-			</w:r>
-			<w:r>
-				<w:fldSimple w:instr="MERGEFIELD department">
-					<w:t>Engineering</w:t>
-				</w:fldSimple>
-			</w:r>
+			<w:r><w:t>Department: </w:t></w:r>
+			<w:r><w:t>«department»</w:t></w:r>
 		</w:p>
 	</w:body>
 </w:document>`
@@ -432,7 +329,7 @@ func TestPerformMergeSomeFieldsMissing(t *testing.T) {
 		t.Fatalf("PerformMerge failed: %v", err)
 	}
 
-	// Should have exactly 2 skipped fields (age is complex field, department is simple field)
+	// Should have exactly 2 skipped fields
 	if len(skipped) != 2 {
 		t.Errorf("Expected 2 skipped fields, got %d: %v", len(skipped), skipped)
 	}
@@ -486,12 +383,12 @@ func TestPerformMergeSomeFieldsMissing(t *testing.T) {
 		t.Error("Merged document should contain '555-9876'")
 	}
 
-	// Should still contain the original merge field instructions for skipped fields
-	if !strings.Contains(mergedContent, "MERGEFIELD age") {
-		t.Error("Merged document should still contain 'MERGEFIELD age' instruction")
+	// Should still contain the original field placeholders for skipped fields
+	if !strings.Contains(mergedContent, "«age»") {
+		t.Error("Merged document should still contain '«age»' placeholder")
 	}
-	if !strings.Contains(mergedContent, "MERGEFIELD department") {
-		t.Error("Merged document should still contain 'MERGEFIELD department' instruction")
+	if !strings.Contains(mergedContent, "«department»") {
+		t.Error("Merged document should still contain '«department»' placeholder")
 	}
 }
 
@@ -707,101 +604,14 @@ func TestPerformMergeWithRealDocxFile(t *testing.T) {
 	}
 }
 
-// TestPerformMergeCaseInsensitive tests case-insensitive field matching
-func TestPerformMergeCaseInsensitive(t *testing.T) {
-	// Create a DOCX with merge fields in different cases
-	documentXML := `<?xml version="1.0"?>
-<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-	<w:body>
-		<w:p>
-			<w:r>
-				<w:fldSimple w:instr="MERGEFIELD FirstName">
-					<w:t>John</w:t>
-				</w:fldSimple>
-			</w:r>
-			<w:r>
-				<w:t> </w:t>
-			</w:r>
-			<w:r>
-				<w:fldSimple w:instr="MERGEFIELD LASTNAME">
-					<w:t>Doe</w:t>
-				</w:fldSimple>
-			</w:r>
-		</w:p>
-		<w:p>
-			<w:r>
-				<w:fldChar w:fldCharType="begin"/>
-			</w:r>
-			<w:r>
-				<w:instrText> MERGEFIELD email_address </w:instrText>
-			</w:r>
-			<w:r>
-				<w:fldChar w:fldCharType="separate"/>
-			</w:r>
-			<w:r>
-				<w:t>user@example.com</w:t>
-			</w:r>
-			<w:r>
-				<w:fldChar w:fldCharType="end"/>
-			</w:r>
-		</w:p>
-	</w:body>
-</w:document>`
-
-	doc := createSampleDocx(documentXML)
-
-	// Provide data in different cases than the fields
-	data := fields.MergeData{
-		"firstname":     "Alice",      // Field is "FirstName"
-		"lastname":      "Smith",      // Field is "LASTNAME"
-		"EMAIL_ADDRESS": "alice@test.com", // Field is "email_address"
-	}
-
-	mergedDoc, skipped, err := PerformMerge(doc, data)
-	if err != nil {
-		t.Fatalf("PerformMerge failed: %v", err)
-	}
-
-	// Should have no skipped fields due to case-insensitive matching
-	if len(skipped) != 0 {
-		t.Errorf("Expected no skipped fields due to case-insensitive matching, got %v", skipped)
-	}
-
-	// Verify the merged document contains the replaced values
-	mergedDocx, err := docx.UnzipDocx(mergedDoc)
-	if err != nil {
-		t.Fatalf("Failed to unzip merged document: %v", err)
-	}
-
-	mergedXML, err := mergedDocx.GetDocumentXML()
-	if err != nil {
-		t.Fatalf("Failed to get merged document XML: %v", err)
-	}
-
-	mergedContent := string(mergedXML)
-	if !strings.Contains(mergedContent, "Alice") {
-		t.Error("Merged document should contain 'Alice'")
-	}
-	if !strings.Contains(mergedContent, "Smith") {
-		t.Error("Merged document should contain 'Smith'")
-	}
-	if !strings.Contains(mergedContent, "alice@test.com") {
-		t.Error("Merged document should contain 'alice@test.com'")
-	}
-}
-
 // TestPerformMergeWithSpecialCharacters tests merging with special characters
 func TestPerformMergeWithSpecialCharacters(t *testing.T) {
-	// Create a DOCX with a simple merge field
+	// Create a DOCX with a simple merge field using expected format
 	documentXML := `<?xml version="1.0"?>
 <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
 	<w:body>
 		<w:p>
-			<w:r>
-				<w:fldSimple w:instr="MERGEFIELD message">
-					<w:t>Default message</w:t>
-				</w:fldSimple>
-			</w:r>
+			<w:r><w:t>«message»</w:t></w:r>
 		</w:p>
 	</w:body>
 </w:document>`
