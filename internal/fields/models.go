@@ -166,7 +166,9 @@ func (mfs *MergeFieldSet) HasField(name string) bool {
 	return mfs.GetFieldByName(name) != nil
 }
 
-// Validate checks if the provided merge data is valid for this field set
+// Validate checks if the provided merge data is valid for this field set.
+// Extra keys in the data that don't match any field are silently ignored.
+// Warnings in the result only come from duplicate-key detection performed in main.go.
 func (mfs *MergeFieldSet) Validate(data MergeData) ValidationResult {
 	result := ValidationResult{
 		Valid:         true,

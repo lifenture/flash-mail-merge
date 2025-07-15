@@ -91,7 +91,8 @@ func replaceSimpleFields(documentXML string, data fields.MergeData, processedFie
 	var skipped []string
 
 	// Regular expression to find simple merge fields
-	simpleFieldRegex := regexp.MustCompile(`(?is)<w:fldSimple[^>]*w:instr="MERGEFIELD\s+([^\s"]+)"[^>]*>.*?</w:fldSimple>`)
+	// Updated to handle leading spaces in w:instr attribute
+	simpleFieldRegex := regexp.MustCompile(`(?is)<w:fldSimple[^>]*w:instr="\s*MERGEFIELD\s+([^\s"\\]+).*?"[^>]*>.*?</w:fldSimple>`)
 	
 	// Count simple merge fields detected
 	simpleFieldMatches := simpleFieldRegex.FindAllString(documentXML, -1)
@@ -100,7 +101,7 @@ func replaceSimpleFields(documentXML string, data fields.MergeData, processedFie
 	// Find all simple merge fields
 	result := simpleFieldRegex.ReplaceAllStringFunc(documentXML, func(match string) string {
 		// Extract field name from the match
-		fieldNameRegex := regexp.MustCompile(`(?i)w:instr="MERGEFIELD\s+([^\s"]+)"`)
+		fieldNameRegex := regexp.MustCompile(`(?i)w:instr="\s*MERGEFIELD\s+([^\s"\\]+)`)
 		fieldNameMatch := fieldNameRegex.FindStringSubmatch(match)
 		if len(fieldNameMatch) < 2 {
 			return match // Return original if we can't extract field name
