@@ -279,6 +279,25 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 	if path == "" {
 		path = request.Resource
 	}
+	
+	// Additional fallback for Lambda console testing
+	if path == "" {
+		// Try to get path from RequestContext if available
+		if request.RequestContext.Path != "" {
+			path = request.RequestContext.Path
+		}
+	}
+	
+	// Last resort: check if HTTP method suggests an endpoint
+	if path == "" {
+		// If we still don't have a path, default to /merge for backward compatibility
+		path = "/merge"
+		logging.Error("No path found in request, defaulting to /merge")
+	}
+	
+	// Log the detected path for debugging
+	logging.Info("Detected path: %s, Request.Path: %s, Request.Resource: %s, RequestContext.Path: %s", 
+		path, request.Path, request.Resource, request.RequestContext.Path)
 
 	// Route to appropriate handler based on path
 	switch path {
