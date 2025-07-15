@@ -99,51 +99,135 @@ The service is deployed using AWS SAM (Serverless Application Model) with a Make
    - Handler: `bootstrap`
    - Memory: 256 MB
    - Timeout: 30 seconds
-   - API Gateway: POST `/detect`
+   - API Gateway: POST `/merge` and POST `/detect`
    - Binary media types enabled for DOCX files
    - S3 buckets for document storage and results
    - API Key authentication with usage plans
 
 ### API
 
-The Lambda function accepts HTTP POST requests to `/detect` with the following structure:
+The service provides two main endpoints for different use cases:
 
-#### Request Body
+## 1. `/merge` Endpoint - Field Detection and Mail Merge
+
+Performs field extraction, data validation, and optional mail merge operations.
+
+### Request Schema
 ```json
 {
-  "docx": "base64-encoded DOCX content",
-  "data": {
+  "docx": "base64-encoded DOCX content",     // Required
+  "data": {                                  // Optional
     "FieldName1": "value1",
     "FieldName2": "value2"
   }
 }
 ```
 
-#### Response
+### Response Schema
 ```json
 {
-  "fields": [
-    {
-      "name": "FieldName1",
-      "type": "text",
-      "required": true
-    }
-  ],
   "validation": {
     "valid": true,
     "errors": [],
     "warnings": []
   },
-  "merged_document": "base64-encoded-result-docx",
-  "skipped_fields": []
+  "mergedDocument": "base64-encoded-result-docx",  // Only when data provided
+  "skippedFields": []                             // Only when data provided
 }
 ```
 
-#### Features
-- **Field Extraction**: Automatically detects merge fields in the document
-- **Data Validation**: Validates provided merge data against field requirements
-- **Duplicate Detection**: Handles duplicate keys with first-win logic
-- **Mail Merge**: Performs complete merge operation when data is provided
+### Example Request
+```bash
+curl -X POST https://your-api-gateway-url/merge \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: your-api-key" \
+  -d '{
+    "docx": "UEsDBAoAAAAAAJZQV1cAAAAAAAAAAAAAAAAJAAAAZG9jUHJvcHMv...",
+    "data": {
+      "FirstName": "John",
+      "LastName": "Doe",
+      "Email": "john.doe@example.com"
+    }
+  }'
+```
+
+### Error Codes
+- **400 Bad Request**: Invalid JSON, missing 'docx' field, invalid base64, or validation errors
+- **500 Internal Server Error**: Document processing failure or merge operation error
+
+## 2. `/detect` Endpoint - Field Extraction Only
+
+Extracts merge fields from DOCX documents without performing validation or merge operations.
+
+### Request Schema
+```json
+{
+  "docx": "base64-encoded DOCX content"  // Required
+}
+```
+
+### Response Schema
+```json
+{
+  "data": {
+    "FieldName1": "",
+    "FieldName2": "",
+    "FieldName3": ""
+  }
+}
+```
+
+### Example Request
+```bash
+curl -X POST https://your-api-gateway-url/detect \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: your-api-key" \
+  -d '{
+    "docx": "UEsDBAoAAAAAAJZQV1cAAAAAAAAAAAAAAAAJAAAAZG9jUHJvcHMv..."
+  }'
+```
+
+### Example Response
+```json
+{
+  "data": {
+    "FirstName": "",
+    "LastName": "",
+    "Email": "",
+    "CompanyName": "",
+    "Address": ""
+  }
+}
+```
+
+### Error Codes
+- **400 Bad Request**: Invalid JSON, missing 'docx' field, or invalid base64
+- **500 Internal Server Error**: Document processing failure or field extraction error
+
+## Common Error Response Format
+
+All endpoints return errors in the following format:
+
+```json
+{
+  "error": "Error message description"
+}
+```
+
+## Authentication
+
+Both endpoints require API Key authentication:
+- Include `x-api-key` header with your API key
+- API keys are managed through AWS API Gateway
+- Rate limiting: 100 requests/second, 200 burst
+- Daily quota: 10,000 requests
+
+## Features
+
+- **Field Extraction**: Automatically detects merge fields in DOCX documents
+- **Data Validation**: Validates provided merge data against field requirements (merge endpoint)
+- **Duplicate Detection**: Handles duplicate keys with first-win logic (merge endpoint)
+- **Mail Merge**: Performs complete merge operation when data is provided (merge endpoint)
 - **Error Handling**: Comprehensive error reporting and validation feedback
 
 ## Examples
@@ -290,6 +374,10 @@ go test -cover ./...
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
+
+## API Documentation
+
+For detailed API reference including request/response schemas, error codes, and SDK examples, see [API.md](API.md).
 
 ## Support
 

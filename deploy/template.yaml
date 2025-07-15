@@ -38,7 +38,12 @@ Resources:
       CodeUri: ../
       Handler: bootstrap
       Events:
-        ApiEvent:
+        ApiMerge:
+          Type: Api
+          Properties:
+            Path: /merge
+            Method: post
+        ApiDetect:
           Type: Api
           Properties:
             Path: /detect
@@ -181,11 +186,17 @@ Resources:
                   - !Ref ResultBucket
 
 Outputs:
-  FlashMailMergeApi:
-    Description: "API Gateway endpoint URL for Flash Mail Merge function"
+  FlashMailMergeMergeApi:
+    Description: "API Gateway endpoint URL for Flash Mail Merge merge function"
+    Value: !Sub "https://${ApiGatewayApi}.execute-api.${AWS::Region}.amazonaws.com/${Stage}/merge"
+    Export:
+      Name: !Sub "${AWS::StackName}-MergeApiEndpoint"
+  
+  FlashMailMergeDetectApi:
+    Description: "API Gateway endpoint URL for Flash Mail Merge detect function"
     Value: !Sub "https://${ApiGatewayApi}.execute-api.${AWS::Region}.amazonaws.com/${Stage}/detect"
     Export:
-      Name: !Sub "${AWS::StackName}-ApiEndpoint"
+      Name: !Sub "${AWS::StackName}-DetectApiEndpoint"
   
   FlashMailMergeFunction:
     Description: "Flash Mail Merge Lambda Function ARN"
