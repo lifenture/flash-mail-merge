@@ -6,7 +6,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 
 	"github.com/aws/aws-lambda-go/events"
@@ -14,6 +13,7 @@ import (
 
 	"com/lifenture/flash-mail-merge/internal/docx"
 	"com/lifenture/flash-mail-merge/internal/fields"
+	"com/lifenture/flash-mail-merge/internal/logging"
 	"com/lifenture/flash-mail-merge/internal/merge"
 )
 
@@ -117,34 +117,34 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 	// Unmarshal the body into MergeRequest
 	var req MergeRequest
 	if err := json.Unmarshal([]byte(request.Body), &req); err != nil {
-		log.Printf("failed to unmarshal request body: %v", err)
+		logging.Error("failed to unmarshal request body: %v", err)
 		return createErrorResponse(http.StatusBadRequest, "Invalid input"), nil
 	}
 
 	// Check if docx field is present
 	if req.Docx == "" {
-		log.Println("'docx' field is empty")
+		logging.Error("'docx' field is empty")
 		return createErrorResponse(http.StatusBadRequest, "'docx' key missing"), nil
 	}
 
 	// Decode the DOCX exactly as today
 	docxBytes, err := base64.StdEncoding.DecodeString(req.Docx)
 	if err != nil {
-		log.Printf("failed to decode base64 string: %v", err)
+		logging.Error("failed to decode base64 string: %v", err)
 		return createErrorResponse(http.StatusBadRequest, "Failed to decode base64 input"), nil
 	}
 
 	// Create a DocxFile from the bytes to use ExtractFields
 	docxFile, err := docx.UnzipDocx(docxBytes)
 	if err != nil {
-		log.Printf("failed to create DOCX file: %v", err)
+		logging.Error("failed to create DOCX file: %v", err)
 		return createErrorResponse(http.StatusInternalServerError, "Failed to process document"), nil
 	}
 
 	// Extract fields to get MergeFieldSet
 	fieldSet, err := fields.ExtractFields(docxFile)
 	if err != nil {
-		log.Printf("failed to extract fields: %v", err)
+		logging.Error("failed to extract fields: %v", err)
 		return createErrorResponse(http.StatusInternalServerError, "Failed to extract fields"), nil
 	}
 
@@ -155,12 +155,12 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 	if req.Data != nil {
 		duplicates := fields.DetectDuplicates(req.Data)
 		if len(duplicates) > 0 {
-			log.Printf("Duplicate keys detected: %v", duplicates)
+			logging.Warn("Duplicate keys detected: %v", duplicates)
 		}
 
 		mergeData, err := parseMergeData(req.Data)
 		if err != nil {
-			log.Printf("failed to parse merge data: %v", err)
+			logging.Error("failed to parse merge data: %v", err)
 			return createErrorResponse(http.StatusBadRequest, "Failed to parse merge data"), nil
 		}
 
@@ -183,7 +183,7 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 			// Return validation error with response including validation details
 			responseBody, err := json.Marshal(response)
 			if err != nil {
-				log.Printf("failed to marshal response: %v", err)
+				logging.Error("failed to marshal response: %v", err)
 				return createErrorResponse(http.StatusInternalServerError, "Failed to create response"), nil
 			}
 
@@ -197,7 +197,7 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 		// After successful validation, perform merge
 		mergedBytes, skipped, err := merge.PerformMerge(docxFile, mergeData)
 		if err != nil {
-			log.Printf("failed to perform merge: %v", err)
+			logging.Error("failed to perform merge: %v", err)
 			return createErrorResponse(http.StatusInternalServerError, "Failed to perform merge"), nil
 		}
 
@@ -212,7 +212,7 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 	// Use helper function to create successful response
 	successResponse, err := createSuccessResponse(response)
 	if err != nil {
-		log.Printf("failed to create success response: %v", err)
+		logging.Error("failed to create success response: %v", err)
 		return createErrorResponse(http.StatusInternalServerError, "Failed to create response"), nil
 	}
 
