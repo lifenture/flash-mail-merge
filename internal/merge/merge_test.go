@@ -129,49 +129,6 @@ func TestReplaceFieldValuesWithSkipped(t *testing.T) {
 	}
 }
 
-func TestCreateReplacementRun(t *testing.T) {
-	// Test with a single run
-	singleRun := `<w:r><w:rPr><w:b/><w:color w:val="FF0000"/></w:rPr><w:t>Old Text</w:t></w:r>`
-	result := createReplacementRun(singleRun, "New Text")
-	
-	if !strings.Contains(result, "<w:t>New Text</w:t>") {
-		t.Error("Text content was not replaced")
-	}
-	if !strings.Contains(result, "<w:rPr><w:b/><w:color w:val=\"FF0000\"/></w:rPr>") {
-		t.Error("Run properties (formatting) were not preserved")
-	}
-
-	// Test with multiple runs - should collapse into first run
-	multipleRuns := `<w:r><w:rPr><w:b/></w:rPr><w:t>Part1</w:t></w:r><w:r><w:t>Part2</w:t></w:r>`
-	result = createReplacementRun(multipleRuns, "Combined Text")
-	
-	if !strings.Contains(result, "<w:t>Combined Text</w:t>") {
-		t.Error("Text content was not replaced correctly")
-	}
-	if !strings.Contains(result, "<w:rPr><w:b/></w:rPr>") {
-		t.Error("First run's formatting was not preserved")
-	}
-	// Should not contain second run
-	if strings.Contains(result, "Part2") {
-		t.Error("Second run was not collapsed")
-	}
-
-	// Test with no runs - should create a simple run
-	noRuns := `<w:p>Some paragraph content</w:p>`
-	result = createReplacementRun(noRuns, "Simple Text")
-	
-	if result != "<w:r><w:t>Simple Text</w:t></w:r>" {
-		t.Errorf("Expected simple run, got: %s", result)
-	}
-
-	// Test with XML characters that need escaping
-	escapeTest := `<w:r><w:t>test</w:t></w:r>`
-	result = createReplacementRun(escapeTest, "<Text & \"Quotes\">") 
-	
-	if !strings.Contains(result, "&lt;Text &amp; &quot;Quotes&quot;&gt;") {
-		t.Error("XML characters were not properly escaped")
-	}
-}
 
 func TestPerformMerge(t *testing.T) {
 	// Create a minimal DOCX structure

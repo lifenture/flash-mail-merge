@@ -123,14 +123,6 @@ func (mf MergeField) String() string {
 	return fmt.Sprintf("MergeField{Name: %s, Type: %s, Required: %v}", mf.Name, mf.Type, mf.Required)
 }
 
-// GetFieldNames returns a slice of all field names in the set
-func (mfs MergeFieldSet) GetFieldNames() []string {
-	names := make([]string, len(mfs.Fields))
-	for i, field := range mfs.Fields {
-		names[i] = field.Name
-	}
-	return names
-}
 
 // GetRequiredFields returns only the required fields from the set
 func (mfs MergeFieldSet) GetRequiredFields() []MergeField {
@@ -252,92 +244,6 @@ func validateFieldValue(field *MergeField, value interface{}) error {
 	return nil
 }
 
-// IsEmpty checks if the merge data is empty
-func (md MergeData) IsEmpty() bool {
-	return len(md) == 0
-}
-
-// GetString safely gets a string value from merge data
-func (md MergeData) GetString(key string) (string, bool) {
-	// First try exact match
-	if value, exists := md[key]; exists {
-		if str, ok := value.(string); ok {
-			return str, true
-		}
-	}
-	
-	// If not found, try normalized key matching
-	normalizedKey := normalize(key)
-	for k, value := range md {
-		if normalize(k) == normalizedKey {
-			if str, ok := value.(string); ok {
-				return str, true
-			}
-		}
-	}
-	return "", false
-}
-
-// GetInt safely gets an integer value from merge data
-func (md MergeData) GetInt(key string) (int, bool) {
-	// First try exact match
-	if value, exists := md[key]; exists {
-		switch v := value.(type) {
-		case int:
-			return v, true
-		case int64:
-			return int(v), true
-		case float64:
-			return int(v), true
-		}
-	}
-	
-	// If not found, try normalized key matching
-	normalizedKey := normalize(key)
-	for k, value := range md {
-		if normalize(k) == normalizedKey {
-			switch v := value.(type) {
-			case int:
-				return v, true
-			case int64:
-				return int(v), true
-			case float64:
-				return int(v), true
-			}
-		}
-	}
-	return 0, false
-}
-
-// GetBool safely gets a boolean value from merge data
-func (md MergeData) GetBool(key string) (bool, bool) {
-	// First try exact match
-	if value, exists := md[key]; exists {
-		if b, ok := value.(bool); ok {
-			return b, true
-		}
-	}
-	
-	// If not found, try normalized key matching
-	normalizedKey := normalize(key)
-	for k, value := range md {
-		if normalize(k) == normalizedKey {
-			if b, ok := value.(bool); ok {
-				return b, true
-			}
-		}
-	}
-	return false, false
-}
-
-// Keys returns all keys in the merge data
-func (md MergeData) Keys() []string {
-	keys := make([]string, 0, len(md))
-	for key := range md {
-		keys = append(keys, key)
-	}
-	return keys
-}
 
 // ToLower converts all string values to lowercase
 func (md MergeData) ToLower() MergeData {

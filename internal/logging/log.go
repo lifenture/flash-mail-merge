@@ -2,7 +2,6 @@ package logging
 
 import (
 	"fmt"
-	"log"
 	"math/rand"
 	"time"
 )
@@ -21,9 +20,3 @@ func generateUUID() string {
 		rand.Uint64()&0xffffffffffff)
 }
 
-// LogWithRequest adds request ID and timestamp to the log message
-func LogWithRequest(message string) {
-	timestamp := time.Now().Format(time.RFC3339)
-	requestID := generateUUID()
-	log.Printf("[%s] [%s] %s", timestamp, requestID, message)
-}

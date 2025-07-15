@@ -70,28 +70,10 @@ func (d *DocxFile) GetContentTypes() ([]byte, error) {
 	return content, nil
 }
 
-// ListFiles returns a list of all files in the DOCX archive
-func (d *DocxFile) ListFiles() []string {
-	files := make([]string, 0, len(d.Files))
-	for filename := range d.Files {
-		files = append(files, filename)
-	}
-	return files
-}
-
 // HasFile checks if a specific file exists in the DOCX archive
 func (d *DocxFile) HasFile(filename string) bool {
 	_, exists := d.Files[filename]
 	return exists
-}
-
-// GetFile retrieves the content of a specific file from the DOCX archive
-func (d *DocxFile) GetFile(filename string) ([]byte, error) {
-	content, exists := d.Files[filename]
-	if !exists {
-		return nil, fmt.Errorf("file %s not found in DOCX archive", filename)
-	}
-	return content, nil
 }
 
 // IsValidDocx performs basic validation to ensure this is a valid DOCX file
@@ -118,34 +100,3 @@ func (d *DocxFile) IsValidDocx() bool {
 	return strings.Contains(string(contentTypes), "application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml")
 }
 
-// ReadDocumentXML opens DOCX bytes, validates the signature, and returns word/document.xml content
-func ReadDocumentXML(buf []byte) (string, error) {
-	// Validate that this is a ZIP file (DOCX signature)
-	if len(buf) < 4 {
-		return "", fmt.Errorf("invalid DOCX file: too short")
-	}
-
-	// Check for ZIP signature (PK header)
-	if buf[0] != 0x50 || buf[1] != 0x4B {
-		return "", fmt.Errorf("invalid DOCX file: missing ZIP signature")
-	}
-
-	// Unzip the DOCX file
-	docx, err := UnzipDocx(buf)
-	if err != nil {
-		return "", fmt.Errorf("failed to unzip DOCX: %w", err)
-	}
-
-	// Validate that this is a valid DOCX file
-	if !docx.IsValidDocx() {
-		return "", fmt.Errorf("invalid DOCX file: missing required DOCX structure")
-	}
-
-	// Get the document XML content
-	documentXML, err := docx.GetDocumentXML()
-	if err != nil {
-		return "", fmt.Errorf("failed to get document XML: %w", err)
-	}
-
-	return string(documentXML), nil
-}

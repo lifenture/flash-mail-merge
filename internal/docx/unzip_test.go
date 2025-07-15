@@ -4,44 +4,6 @@ import (
 	"testing"
 )
 
-func TestReadDocumentXML(t *testing.T) {
-	// Test with invalid data (too short)
-	t.Run("invalid data too short", func(t *testing.T) {
-		buf := []byte{0x50, 0x4B}
-		_, err := ReadDocumentXML(buf)
-		if err == nil {
-			t.Error("expected error for too short data")
-		}
-		if err.Error() != "invalid DOCX file: too short" {
-			t.Errorf("unexpected error message: %s", err.Error())
-		}
-	})
-
-	// Test with invalid ZIP signature
-	t.Run("invalid ZIP signature", func(t *testing.T) {
-		buf := []byte{0x00, 0x00, 0x00, 0x00}
-		_, err := ReadDocumentXML(buf)
-		if err == nil {
-			t.Error("expected error for invalid ZIP signature")
-		}
-		if err.Error() != "invalid DOCX file: missing ZIP signature" {
-			t.Errorf("unexpected error message: %s", err.Error())
-		}
-	})
-
-	// Test with valid ZIP signature but invalid zip content
-	t.Run("valid ZIP signature but invalid content", func(t *testing.T) {
-		buf := []byte{0x50, 0x4B, 0x03, 0x04, 0x00, 0x00}
-		_, err := ReadDocumentXML(buf)
-		if err == nil {
-			t.Error("expected error for invalid ZIP content")
-		}
-		// Should fail during zip reading
-		if err.Error() != "failed to unzip DOCX: failed to create zip reader: zip: not a valid zip file" {
-			t.Errorf("unexpected error message: %s", err.Error())
-		}
-	})
-}
 
 func TestUnzipDocx(t *testing.T) {
 	// Test with invalid data

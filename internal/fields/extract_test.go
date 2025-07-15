@@ -174,14 +174,20 @@ func TestExtractFromSampleDocx(t *testing.T) {
 		t.Fatalf("Failed to read sample DOCX file: %v", err)
 	}
 	
-	// Extract document XML
-	documentXML, err := docx.ReadDocumentXML(docxBytes)
+	// Unzip the DOCX file
+	docxFile, err := docx.UnzipDocx(docxBytes)
 	if err != nil {
-		t.Fatalf("Failed to read document XML: %v", err)
+		t.Fatalf("Failed to unzip DOCX: %v", err)
+	}
+	
+	// Get document XML
+	documentXMLBytes, err := docxFile.GetDocumentXML()
+	if err != nil {
+		t.Fatalf("Failed to get document XML: %v", err)
 	}
 	
 	// Test the Extract function
-	fields, err := Extract(documentXML)
+	fields, err := Extract(string(documentXMLBytes))
 	if err != nil {
 		t.Fatalf("Failed to extract fields: %v", err)
 	}
